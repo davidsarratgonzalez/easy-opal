@@ -141,14 +141,26 @@ check_python_version() {
     # Debug: show which python3 we're using
     python3_path=$(which python3 2>/dev/null || echo "unknown")
     echo "🔍 Using python3 from: $python3_path"
-    
+
     # Get Python version
     python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown")
     echo "🐍 Python version: $python_version"
-    
+
     # Check if version meets Poetry 2.x requirements (Python 3.8+)
     if python3 -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)" 2>/dev/null; then
         echo "✅ Python version is compatible with Poetry 2.x"
+
+        # On macOS, check if Python can create venvs (CommandLineTools Python has limitations)
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            if ! python3 -c "import venv; venv.EnvBuilder().create('/tmp/venv_test_$$')" 2>/dev/null; then
+                rm -rf "/tmp/venv_test_$$" 2>/dev/null
+                echo "⚠️  Warning: Your Python cannot create virtual environments"
+                echo "   This is common with macOS CommandLineTools Python."
+                return 3
+            fi
+            rm -rf "/tmp/venv_test_$$" 2>/dev/null
+        fi
+
         return 0
     else
         echo "⚠️  Python $python_version detected. Poetry 2.x requires Python 3.8+"
@@ -802,11 +814,11 @@ elif [ $python_check_result -eq 2 ]; then
         if install_newer_python; then
             echo "✅ Python upgrade completed"
             echo "🔄 Re-checking Python version..."
-            
+
             # Refresh command hash and PATH
             hash -r
             export PATH="/usr/local/bin:$PATH"
-            
+
             # Re-run the Python version check
             if check_python_version; then
                 echo "✅ Python upgrade verification successful"
@@ -840,6 +852,25 @@ elif [ $python_check_result -eq 2 ]; then
         echo ""
         exit 1
     fi
+elif [ $python_check_result -eq 3 ]; then
+    # macOS: Python cannot create venvs (CommandLineTools limitation)
+    echo ""
+    echo "❌ [ERROR] Your Python installation cannot create virtual environments."
+    echo "   This is a known limitation of the macOS CommandLineTools Python."
+    echo ""
+    echo "📋 To fix this, install Python via Homebrew:"
+    echo ""
+    echo "   ${BOLD}brew install python@3.11${NC}"
+    echo ""
+    echo "   Then re-run setup with the Homebrew Python in your PATH:"
+    echo ""
+    echo "   ${BOLD}PATH=\"/opt/homebrew/opt/python@3.11/libexec/bin:\$PATH\" ./setup${NC}"
+    echo ""
+    echo "   Or add it permanently to your shell config (~/.zshrc or ~/.bashrc):"
+    echo ""
+    echo "   ${BOLD}export PATH=\"/opt/homebrew/opt/python@3.11/libexec/bin:\$PATH\"${NC}"
+    echo ""
+    exit 1
 fi
 
 # Main Docker check
