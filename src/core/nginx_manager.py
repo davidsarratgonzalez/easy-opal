@@ -34,11 +34,25 @@ def generate_nginx_config():
 
     with open(template_path, "r") as f:
         template = f.read()
-    
+
     # Only substitute server names if we are using an HTTPS template
     if strategy != "none":
         server_names = " ".join(config["hosts"])
         template = template.replace("${OPAL_HOSTNAME}", server_names)
+
+        # Set correct certificate paths based on strategy
+        if strategy == "letsencrypt":
+            # Let's Encrypt certificates are stored in /etc/letsencrypt/live/{domain}/
+            domain = config["hosts"][0]
+            cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+            key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
+        else:
+            # For self-signed and manual, use the standard nginx certs directory
+            cert_path = "/etc/nginx/certs/opal.crt"
+            key_path = "/etc/nginx/certs/opal.key"
+
+        template = template.replace("/etc/nginx/certs/opal.crt", cert_path)
+        template = template.replace("/etc/nginx/certs/opal.key", key_path)
 
     output_path = NGINX_CONF_DIR / "nginx.conf"
     with open(output_path, "w") as f:
